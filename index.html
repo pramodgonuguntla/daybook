@@ -218,7 +218,7 @@ img{max-width:100%}
 <body>
 
 
-<div class="login" id="login">
+<div class="login" id="login" hidden>
   <h1>Family Daybook</h1>
   <p id="login-msg">Routine, to-dos, notes and the family shopping list.</p>
   <button class="gbtn" id="gsign" type="button"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.8 6C12.4 13.7 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.8 6C6.6 42.6 14.6 48 24 48z"/></svg>Sign in with Google</button>
@@ -312,11 +312,11 @@ img{max-width:100%}
 
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
-import {getAuth,onAuthStateChanged,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,signOut} from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
+import {initializeAuth,indexedDBLocalPersistence,browserLocalPersistence,browserPopupRedirectResolver,onAuthStateChanged,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,signOut} from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
 import {initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,deleteDoc,onSnapshot,writeBatch} from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 const fbApp=initializeApp(firebaseConfig);
-const auth=getAuth(fbApp);
+const auth=initializeAuth(fbApp,{persistence:[indexedDBLocalPersistence,browserLocalPersistence],popupRedirectResolver:browserPopupRedirectResolver});
 let fdb;try{fdb=initializeFirestore(fbApp,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})})}catch(e){fdb=initializeFirestore(fbApp,{})}
 (function(){
 const $=id=>document.getElementById(id);
@@ -853,6 +853,9 @@ setInterval(checkDay,60000);document.addEventListener('visibilitychange',()=>{if
 let startTab=location.hash.slice(1);if(!startTab){try{startTab=localStorage.getItem('daybook.tab')||''}catch(e){}}
 show(startTab);
 const login=$('login'), lerr=$('login-err');
+try{const w=JSON.parse(localStorage.getItem('daybook.who')||'null');if(w)window.daybookUser=w}catch(e){}
+/* only ask to sign in if nobody was signed in on this phone before, or after the check finishes */
+if(!window.daybookUser)login.hidden=false;
 $('gsign').onclick=async()=>{lerr.hidden=true;const prov=new GoogleAuthProvider();prov.setCustomParameters({prompt:'select_account'});
   try{await signInWithPopup(auth,prov)}catch(e){const c=e&&e.code||'';
     if(c==='auth/popup-blocked'||c==='auth/operation-not-supported-in-this-environment'){try{await signInWithRedirect(auth,prov)}catch(e2){lerr.textContent='Sign-in failed. Try again.';lerr.hidden=false}}
@@ -862,8 +865,8 @@ let unsubs=[];
 window.daybookSignOut=()=>signOut(auth);
 onAuthStateChanged(auth,user=>{
   unsubs.forEach(u=>u());unsubs=[];
-  if(!user){myId=null;items=new Map();mode='loading';login.hidden=false;return}
-  myId=user.uid;myName=(user.displayName||'').split(' ')[0]||user.email;window.daybookUser={name:user.displayName,email:user.email};
+  if(!user){myId=null;items=new Map();mode='loading';login.hidden=false;try{localStorage.removeItem('daybook.who')}catch(e){};return}
+  myId=user.uid;myName=(user.displayName||'').split(' ')[0]||user.email;window.daybookUser={name:user.displayName,email:user.email};try{localStorage.setItem('daybook.who',JSON.stringify(window.daybookUser))}catch(e){}
   login.hidden=true;
   let pm=new Map(), sm=new Map(), sReady=false;
   const merge=()=>{items=new Map([...pm,...sm]);render();netBar()};
