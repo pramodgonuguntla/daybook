@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#F4F3EF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F1115" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -887,6 +887,13 @@ window.daybookImport=async(privateDocs,sharedDocs)=>{if(!myId)throw new Error('s
   for(let i=0;i<all.length;i+=400){const b=writeBatch(fdb);all.slice(i,i+400).forEach(([r,o])=>{const c={...o};delete c.id;b.set(r,c);n++});await b.commit()}
   return n};
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* no accidental zoom: block double-tap zoom and pinch on iPhone */
+document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
+document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
+let lastT=0,lastX=0,lastY=0;
+document.addEventListener('touchend',e=>{const t=e.changedTouches[0],now=Date.now();
+  if(now-lastT<320&&Math.abs(t.clientX-lastX)<30&&Math.abs(t.clientY-lastY)<30)e.preventDefault();
+  lastT=now;lastX=t.clientX;lastY=t.clientY},{passive:false});
 })();
 </script>
 
