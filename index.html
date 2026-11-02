@@ -368,6 +368,7 @@ function remove(arr,msg){arr.forEach(o=>{items.delete(o.id);persist(o.id)});rend
 /* ---------- views ---------- */
 const TITLES={routine:'Routine',todo:'To-do',grocery:'Grocery',shopping:'Shopping',notes:'Notes'};
 const LIST={routine:'routine',todo:'todo',grocery:'grocery',shopping:'shop'};
+let todoMode='personal';try{todoMode=localStorage.getItem('daybook.todomode')||'personal'}catch(e){}
 let tab='routine', openNote=null, selDay=new Date().getDay();
 const ORDER=[1,2,3,4,5,6,0], DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], DFULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const onDay=(o,d)=>!o.days||o.days.includes(d);
@@ -555,7 +556,7 @@ function render(){
     sub=selDay===todayDow
       ? now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})+(rows.length?' · '+rows.filter(isDone).length+' of '+rows.length+' done':'')
       : DFULL[selDay]+(rows.length?' · '+rows.length+' item'+(rows.length>1?'s':''):'');
-  } else if(tab==='todo')sub=rows.length?rows.length+' item'+(rows.length>1?'s':''):'';
+  } else if(tab==='todo'){const n=rows.filter(o=>todoMode==='work'?o.when==='work':o.when!=='work').length;sub=n?n+' item'+(n>1?'s':''):''}
   else sub=rows.filter(r=>!isDone(r)).length?rows.filter(r=>!isDone(r)).length+' left':'';
   const rowFor=o=>{
     if(tab==='routine')return routineRow(o);
@@ -588,8 +589,12 @@ function render(){
       off.length?h('div',{class:'offlbl'},'Not on '+DFULL[selDay]):null,
       off.length?h('ul',{class:'offlist'},off.map(offRow)):null);
   } else if(tab==='todo'){
-    const plain=rows.filter(o=>!o.rep), reps=rows.filter(o=>o.rep), due=reps.filter(isDueRep);
-    const G=[...ORDER.map(d=>({key:'d'+d,name:DFULL[d]+(d===todayDow?' · Today':''),its:plain.filter(o=>o.when===d),due:d===todayDow?due:[]})),{key:'work',name:'Work',its:plain.filter(o=>o.when==='work'),due:[]},{key:'later',name:'Long term',its:plain.filter(o=>o.when==null),due:[]},{key:'rep',name:'Repeating',its:reps.slice().sort((a,b)=>nextRep(a)<nextRep(b)?-1:1),due:[],noAdd:true}];
+    if(todoMode==='work'){const w=rows.filter(o=>o.when==='work');
+      ul=h('div',null,h('ul',{class:'tlist'},w.map((o,i)=>todoRow(o,i+1)),addRow(list,'work')));
+    } else {
+    const pr=rows.filter(o=>o.when!=='work');
+    const plain=pr.filter(o=>!o.rep), reps=pr.filter(o=>o.rep), due=reps.filter(isDueRep);
+    const G=[...ORDER.map(d=>({key:'d'+d,name:DFULL[d]+(d===todayDow?' · Today':''),its:plain.filter(o=>o.when===d),due:d===todayDow?due:[]})),{key:'later',name:'Long term',its:plain.filter(o=>o.when==null),due:[]},{key:'rep',name:'Repeating',its:reps.slice().sort((a,b)=>nextRep(a)<nextRep(b)?-1:1),due:[],noAdd:true}];
     const ti=G.findIndex(g=>g.key==='d'+todayDow);if(ti>0)G.unshift(...G.splice(ti,1));
     ul=h('div',null,G.map(g=>{const k='todo-'+g.key, open=openGroups.has(k)||(!openGroups.has(k+'-x')&&g.key==='d'+todayDow);
       const tog=()=>{if(open){openGroups.delete(k);openGroups.add(k+'-x')}else{openGroups.add(k);openGroups.delete(k+'-x')}saveOpen();render()};
@@ -597,12 +602,14 @@ function render(){
         h('div',{class:'grp-row'},h('button',{class:'grp-head',type:'button','aria-expanded':String(open),onclick:tog},
           h('span',{class:'chev','aria-hidden':'true'}),h('span',{class:'grp-title'},g.name),h('span',{class:'grp-count'},(g.its.length+g.due.length)?String(g.its.length+g.due.length):''))),
         open?h('ul',{class:'tlist'},g.due.map((o,i)=>todoRow(o,i+1,true)),g.its.map((o,i)=>todoRow(o,g.due.length+i+1)),g.noAdd?null:addRow(list,g.key)):null)}));
+    }
   } else ul=h('ul',null,rows.map(rowFor),addRow(list));
   const head=[h('div',{class:'titlebar'},h('h1',null,TITLES[tab]),h('div',{class:'tright'},searchBtn(),plusBtn(),tab==='shopping'?h('button',{class:'addlist',type:'button',onclick:()=>openGroup(null)},'New list'):null,avatarBtn()))];
+  if(tab==='todo')head.push(h('div',{class:'dtabs',role:'tablist','aria-label':'List'},[['personal','Personal'],['work','Work']].map(([k,l])=>h('button',{class:'dtab',type:'button',role:'tab','aria-selected':String(todoMode===k),onclick:()=>{todoMode=k;try{localStorage.setItem('daybook.todomode',k)}catch(e){}render();window.scrollTo(0,0)}},l))));
   if(tab==='routine')head.push(h('div',{class:'dtabs',role:'tablist','aria-label':'Day'},ORDER.map(d=>h('button',{class:'dtab'+(d===todayDow?' today':''),type:'button',role:'tab','aria-selected':String(d===selDay),'aria-label':DFULL[d]+(d===todayDow?' (today)':''),onclick:()=>{selDay=d;render()}},DN[d]))));
   const subEl=h('div',{class:'sub'},mode==='loading'?'Loading…':sub);
-  if(tab==='todo'||tab==='shopping'){
-    const keys=tab==='todo'?[...ORDER.map(d=>'d'+d),'work','later','rep']:[...listOf('shopgroup').map(g=>g.id),'_other'];
+  if((tab==='todo'&&todoMode!=='work')||tab==='shopping'){
+    const keys=tab==='todo'?[...ORDER.map(d=>'d'+d),'later','rep']:[...listOf('shopgroup').map(g=>g.id),'_other'];
     const isOpen=k=>tab==='todo'?(openGroups.has('todo-'+k)||(!openGroups.has('todo-'+k+'-x')&&k==='d'+todayDow)):openGroups.has(k);
     const anyOpen=keys.some(isOpen);
     const toggleAll=()=>{keys.forEach(k=>{if(tab==='todo'){if(anyOpen){openGroups.delete('todo-'+k);openGroups.add('todo-'+k+'-x')}else{openGroups.add('todo-'+k);openGroups.delete('todo-'+k+'-x')}}
@@ -699,7 +706,7 @@ function drawResults(){if(!sBox)return;const q=sIn.value.trim().toLowerCase();
 function goTo(o){searchOn=false;sIn=sBox=null;
   if(o.list==='note'){location.hash='notes';tab='notes';openNote=o.id;render();return}
   if(o.list==='routine'){tab='routine';location.hash='routine';if(!onDay(o,selDay))selDay=onDay(o,new Date().getDay())?new Date().getDay():(o.days||[1])[0];render();openPop(o.id);return}
-  if(o.list==='todo'){tab='todo';location.hash='todo';render();openTodo(o.id);return}
+  if(o.list==='todo'){tab='todo';todoMode=o.when==='work'?'work':'personal';location.hash='todo';render();openTodo(o.id);return}
   if(o.list==='grocery'){tab='grocery';location.hash='grocery';render();openGItem(o.id);return}
   tab='shopping';location.hash='shopping';const k=o.group&&items.get(o.group)?o.group:'_other';openGroups.add(k);saveOpen();render();
   requestAnimationFrame(()=>{const li=document.querySelector('li[data-id="'+o.id+'"]');if(li){li.scrollIntoView({block:'center'});li.classList.add('flash')}})}
@@ -839,7 +846,7 @@ function qOptions(){const dow=new Date().getDay();
   if(tab==='todo')return [{k:'d'+dow,l:'Today'},...ORDER.filter(d=>d!==dow).map(d=>({k:'d'+d,l:DN[d]})),{k:'work',l:'Work'},{k:'later',l:'Long term'}];
   if(tab==='shopping')return listOf('shopgroup').map(g=>({k:g.id,l:g.name}));
   return null}
-function openQuick(){if(tab==='grocery'){openGItem(null);return}if(tab==='notes'){openNote=newId();render();return}const opts=qOptions();$('qpop-lbl').textContent='Add to '+TITLES[tab];$('qpop-text').value='';
+function openQuick(){if(tab==='todo')qTo=todoMode==='work'?'work':(qTo==='work'?null:qTo);if(tab==='grocery'){openGItem(null);return}if(tab==='notes'){openNote=newId();render();return}const opts=qOptions();$('qpop-lbl').textContent='Add to '+TITLES[tab];$('qpop-text').value='';
   $('qpop-tlbl').hidden=$('qpop-to').hidden=!opts;
   if(opts){if(!qTo||!opts.some(o=>o.k===qTo))qTo=opts[0].k;
     $('qpop-to').replaceChildren(...opts.map(o=>h('button',{type:'button','data-k':o.k,'aria-pressed':String(o.k===qTo),onclick:()=>{qTo=o.k;$('qpop-to').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===qTo)))}},o.l)))}
