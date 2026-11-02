@@ -262,15 +262,17 @@ img{max-width:100%}
 <div class="backdrop" id="tpop" hidden>
   <form class="sheet" id="tpop-form" role="dialog" aria-label="To-do" autocomplete="off">
     <input id="tpop-text" type="text" aria-label="Name">
-    <div class="lbl">Repeat</div>
-    <div class="seg" id="tpop-rep"><button type="button" data-r="">No</button><button type="button" data-r="month">Monthly</button><button type="button" data-r="year">Yearly</button></div>
-    <div id="tpop-repwrap" hidden style="display:flex;flex-direction:column;gap:8px"><div class="lbl" id="tpop-replbl">Due on</div><input id="tpop-date" type="date" aria-label="Due date"></div>
-    <div id="tpop-movewrap" style="display:flex;flex-direction:column;gap:16px">
-    <div class="lbl">Move to</div>
-    <div class="dayset" id="tpop-days"></div>
-    <div class="seg2"><button type="button" class="later" id="tpop-work" aria-pressed="false">Work</button><button type="button" class="later" id="tpop-later" aria-pressed="false">Long term</button></div>
-    <div id="tpop-wcwrap" hidden style="display:flex;flex-direction:column;gap:12px"><div class="lbl">Work category</div><div class="qsel" id="tpop-wcats"></div></div>
+    <div class="dtabs" id="tpop-mode" role="tablist"><button type="button" class="dtab" data-m="personal">Personal</button><button type="button" class="dtab" data-m="work">Work</button></div>
+    <div id="tpop-pers" style="display:flex;flex-direction:column;gap:14px">
+      <div id="tpop-movewrap" style="display:flex;flex-direction:column;gap:10px">
+        <div class="dayset" id="tpop-days"></div>
+        <button type="button" class="later" id="tpop-later" aria-pressed="false">Long term</button>
+      </div>
+      <div class="lbl">Repeat</div>
+      <div class="seg" id="tpop-rep"><button type="button" data-r="">No</button><button type="button" data-r="month">Monthly</button><button type="button" data-r="year">Yearly</button></div>
+      <div id="tpop-repwrap" hidden style="display:flex;flex-direction:column;gap:8px"><div class="lbl" id="tpop-replbl">Due on</div><input id="tpop-date" type="date" aria-label="Due date"></div>
     </div>
+    <div class="qsel" id="tpop-wcats" hidden></div>
     <div class="sheet-bar"><button class="rm" type="button" id="tpop-del">Delete</button><button class="save" type="submit">Save</button></div>
   </form>
 </div>
@@ -804,18 +806,24 @@ $('pop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.
 /* ---------- shopping list pop-up ---------- */
 let gId=null;
 let tId=null,tWhen=null;
-function tMark(){$('tpop-days').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.d===tWhen)));$('tpop-later').setAttribute('aria-pressed',String(tWhen==null));$('tpop-work').setAttribute('aria-pressed',String(tWhen==='work'));
-  const cats=listOf('workcat');$('tpop-wcwrap').hidden=!(tWhen==='work'&&cats.length);
+function tMark(){const w=tWhen==='work';
+  $('tpop-mode').querySelectorAll('button').forEach(b=>b.setAttribute('aria-selected',String((b.dataset.m==='work')===w)));
+  $('tpop-pers').hidden=w;$('tpop-wcats').hidden=!w;
+  $('tpop-days').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.d===tWhen)));$('tpop-later').setAttribute('aria-pressed',String(tWhen==null));
+  const cats=listOf('workcat');
   $('tpop-wcats').replaceChildren(...[...cats.map(c=>[c.id,c.name]),['','Unsorted']].map(([id,nm])=>h('button',{type:'button','aria-pressed':String((tWcat||'')===id),onclick:()=>{tWcat=id||null;tMark()}},nm)))}
 let tWcat=null;
 ORDER.forEach(d=>$('tpop-days').append(h('button',{type:'button','data-d':d,'aria-label':DFULL[d],onclick:()=>{tWhen=d;tMark()}},DN[d])));
 $('tpop-later').onclick=()=>{tWhen=null;tMark()};
-$('tpop-work').onclick=()=>{tWhen='work';tMark()};
+let tLastPers=null;
+$('tpop-mode').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  if(b.dataset.m==='work'){if(tWhen!=='work')tLastPers=tWhen;tWhen='work';tRep='';repMark()}
+  else if(tWhen==='work')tWhen=tLastPers;tMark()});
 let tRep='';
 function repMark(){$('tpop-rep').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.r===tRep)));
   $('tpop-repwrap').hidden=!tRep;$('tpop-movewrap').hidden=!!tRep;$('tpop-replbl').textContent=tRep==='month'?'Due on (repeats this date every month)':'Due on (repeats this date every year)'}
 $('tpop-rep').querySelectorAll('button').forEach(b=>b.onclick=()=>{tRep=b.dataset.r;if(tRep&&!$('tpop-date').value)$('tpop-date').value=today;repMark()});
-function openTodo(id){const o=items.get(id);if(!o)return;tId=id;$('tpop-text').value=o.text;tWhen=o.when==null?null:o.when;tWcat=o.wcat||null;tMark();
+function openTodo(id){const o=items.get(id);if(!o)return;tId=id;$('tpop-text').value=o.text;tWhen=o.when==null?null:o.when;tWcat=o.wcat||null;tLastPers=null;tMark();
   tRep=o.rep||'';$('tpop-date').value=o.rep?(isDueRep(o)?dueKey(o):nextRep(o)):'';repMark();$('tpop-del').textContent='Delete';$('tpop').hidden=false}
 function closeTodo(){tId=null;$('tpop').hidden=true}
 $('tpop').addEventListener('click',e=>{if(e.target===$('tpop'))closeTodo()});
