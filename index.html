@@ -269,6 +269,7 @@ img{max-width:100%}
     <div class="lbl">Move to</div>
     <div class="dayset" id="tpop-days"></div>
     <div class="seg2"><button type="button" class="later" id="tpop-work" aria-pressed="false">Work</button><button type="button" class="later" id="tpop-later" aria-pressed="false">Long term</button></div>
+    <div id="tpop-wcwrap" hidden style="display:flex;flex-direction:column;gap:12px"><div class="lbl">Work category</div><div class="qsel" id="tpop-wcats"></div></div>
     </div>
     <div class="sheet-bar"><button class="rm" type="button" id="tpop-del">Delete</button><button class="save" type="submit">Save</button></div>
   </form>
@@ -296,6 +297,13 @@ img{max-width:100%}
     <div class="qsel" id="gsheet-cats"></div>
     <input id="gsheet-newcat" type="text" placeholder="Or type a new category" aria-label="New category">
     <div class="sheet-bar"><button class="rm" type="button" id="gsheet-del">Delete</button><button class="save" type="submit" id="gsheet-save">Save</button></div>
+  </form>
+</div>
+<div class="backdrop" id="wpop" hidden>
+  <form class="sheet" id="wpop-form" role="dialog" aria-label="Work category" autocomplete="off">
+    <div class="lbl" id="wpop-lbl">New category</div>
+    <input id="wpop-text" type="text" placeholder="e.g. Product" aria-label="Category name">
+    <div class="sheet-bar"><button class="rm" type="button" id="wpop-del">Delete</button><button class="save" type="submit">Save</button></div>
   </form>
 </div>
 <div class="backdrop" id="acct" hidden>
@@ -516,7 +524,7 @@ function addRow(list,group){
     onblur:e=>commit(e.target,false)});
   function commit(t,keep){const v=t.value.trim();if(!v||dupOpen)return;
     const add=()=>{t.value='';grow(t);
-      const o={id:newId(),list,text:v,done:false,doneOn:null,created:Date.now()};if(list==='todo'){o.when=group==='later'?null:group==='work'?'work':+String(group).slice(1)}else if(group)o.group=group;
+      const o={id:newId(),list,text:v,done:false,doneOn:null,created:Date.now()};if(list==='todo'){if(String(group).startsWith('work')){o.when='work';const c=String(group).slice(5);if(c)o.wcat=c}else o.when=group==='later'?null:+String(group).slice(1)}else if(group)o.group=group;
       if(list==='shop'){if(myId)o.by=myId;const old=[...items.values()].find(x=>x.list==='shop'&&x.archived&&norm(x.text)===norm(v));
         if(old){put({...old,archived:false,done:false,group:group||old.group,by:myId||old.by,created:Date.now()});if(keep)setTimeout(()=>{const n=$(aid);if(n)n.focus()},0);return}}
       put(o);
@@ -589,8 +597,15 @@ function render(){
       off.length?h('div',{class:'offlbl'},'Not on '+DFULL[selDay]):null,
       off.length?h('ul',{class:'offlist'},off.map(offRow)):null);
   } else if(tab==='todo'){
-    if(todoMode==='work'){const w=rows.filter(o=>o.when==='work');
-      ul=h('div',null,h('ul',{class:'tlist'},w.map((o,i)=>todoRow(o,i+1)),addRow(list,'work')));
+    if(todoMode==='work'){const w=rows.filter(o=>o.when==='work'), cats=listOf('workcat'), ids=new Set(cats.map(c=>c.id));
+      const WG=[...cats.map(c=>({key:c.id,name:c.name,its:w.filter(o=>o.wcat===c.id),cid:c.id})),{key:'none',name:cats.length?'Unsorted':'Work',its:w.filter(o=>!o.wcat||!ids.has(o.wcat)),cid:null}].filter(g=>g.cid||g.its.length||!cats.length);
+      ul=h('div',null,WG.map(g=>{const k='wk-'+g.key, open=!openGroups.has(k+'-x');
+        const tog=()=>{if(open)openGroups.add(k+'-x');else openGroups.delete(k+'-x');saveOpen();render()};
+        return h('section',{class:'grp'+(open?' open':'')},
+          h('div',{class:'grp-row'},h('button',{class:'grp-head',type:'button','aria-expanded':String(open),onclick:tog},
+            h('span',{class:'chev','aria-hidden':'true'}),h('span',{class:'grp-title'},g.name),h('span',{class:'grp-count'},g.its.length?String(g.its.length):'')),
+            g.cid?h('button',{class:'grp-more',type:'button','aria-label':'Rename or delete '+g.name,onclick:()=>openWCat(g.cid)},'⋯'):null),
+          open?h('ul',{class:'tlist'},g.its.map((o,i)=>todoRow(o,i+1)),addRow(list,'work:'+(g.cid||''))):null)}));
     } else {
     const pr=rows.filter(o=>o.when!=='work');
     const plain=pr.filter(o=>!o.rep), reps=pr.filter(o=>o.rep), due=reps.filter(isDueRep);
@@ -604,11 +619,14 @@ function render(){
         open?h('ul',{class:'tlist'},g.due.map((o,i)=>todoRow(o,i+1,true)),g.its.map((o,i)=>todoRow(o,g.due.length+i+1)),g.noAdd?null:addRow(list,g.key)):null)}));
     }
   } else ul=h('ul',null,rows.map(rowFor),addRow(list));
-  const head=[h('div',{class:'titlebar'},h('h1',null,TITLES[tab]),h('div',{class:'tright'},searchBtn(),plusBtn(),tab==='shopping'?h('button',{class:'addlist',type:'button',onclick:()=>openGroup(null)},'New list'):null,avatarBtn()))];
+  const head=[h('div',{class:'titlebar'},h('h1',null,TITLES[tab]),h('div',{class:'tright'},searchBtn(),plusBtn(),tab==='shopping'?h('button',{class:'addlist',type:'button',onclick:()=>openGroup(null)},'New list'):null,tab==='todo'&&todoMode==='work'?h('button',{class:'addlist',type:'button',onclick:()=>openWCat(null)},'New category'):null,avatarBtn()))];
   if(tab==='todo')head.push(h('div',{class:'dtabs',role:'tablist','aria-label':'List'},[['personal','Personal'],['work','Work']].map(([k,l])=>h('button',{class:'dtab',type:'button',role:'tab','aria-selected':String(todoMode===k),onclick:()=>{todoMode=k;try{localStorage.setItem('daybook.todomode',k)}catch(e){}render();window.scrollTo(0,0)}},l))));
   if(tab==='routine')head.push(h('div',{class:'dtabs',role:'tablist','aria-label':'Day'},ORDER.map(d=>h('button',{class:'dtab'+(d===todayDow?' today':''),type:'button',role:'tab','aria-selected':String(d===selDay),'aria-label':DFULL[d]+(d===todayDow?' (today)':''),onclick:()=>{selDay=d;render()}},DN[d]))));
   const subEl=h('div',{class:'sub'},mode==='loading'?'Loading…':sub);
-  if((tab==='todo'&&todoMode!=='work')||tab==='shopping'){
+  if(tab==='todo'&&todoMode==='work'){
+    const wk=[...listOf('workcat').map(c=>'wk-'+c.id),'wk-none'], anyOpenW=wk.some(k=>!openGroups.has(k+'-x'));
+    head.push(h('div',{class:'subrow'},h('div',{class:'sub'},mode==='loading'?'Loading…':sub),h('button',{class:'allbtn',type:'button',onclick:()=>{wk.forEach(k=>{if(anyOpenW)openGroups.add(k+'-x');else openGroups.delete(k+'-x')});saveOpen();render()}},anyOpenW?'Collapse all':'Expand all')));
+  } else if((tab==='todo'&&todoMode!=='work')||tab==='shopping'){
     const keys=tab==='todo'?[...ORDER.map(d=>'d'+d),'later','rep']:[...listOf('shopgroup').map(g=>g.id),'_other'];
     const isOpen=k=>tab==='todo'?(openGroups.has('todo-'+k)||(!openGroups.has('todo-'+k+'-x')&&k==='d'+todayDow)):openGroups.has(k);
     const anyOpen=keys.some(isOpen);
@@ -786,7 +804,10 @@ $('pop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.
 /* ---------- shopping list pop-up ---------- */
 let gId=null;
 let tId=null,tWhen=null;
-function tMark(){$('tpop-days').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.d===tWhen)));$('tpop-later').setAttribute('aria-pressed',String(tWhen==null));$('tpop-work').setAttribute('aria-pressed',String(tWhen==='work'))}
+function tMark(){$('tpop-days').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.d===tWhen)));$('tpop-later').setAttribute('aria-pressed',String(tWhen==null));$('tpop-work').setAttribute('aria-pressed',String(tWhen==='work'));
+  const cats=listOf('workcat');$('tpop-wcwrap').hidden=!(tWhen==='work'&&cats.length);
+  $('tpop-wcats').replaceChildren(...[...cats.map(c=>[c.id,c.name]),['','Unsorted']].map(([id,nm])=>h('button',{type:'button','aria-pressed':String((tWcat||'')===id),onclick:()=>{tWcat=id||null;tMark()}},nm)))}
+let tWcat=null;
 ORDER.forEach(d=>$('tpop-days').append(h('button',{type:'button','data-d':d,'aria-label':DFULL[d],onclick:()=>{tWhen=d;tMark()}},DN[d])));
 $('tpop-later').onclick=()=>{tWhen=null;tMark()};
 $('tpop-work').onclick=()=>{tWhen='work';tMark()};
@@ -794,7 +815,7 @@ let tRep='';
 function repMark(){$('tpop-rep').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.r===tRep)));
   $('tpop-repwrap').hidden=!tRep;$('tpop-movewrap').hidden=!!tRep;$('tpop-replbl').textContent=tRep==='month'?'Due on (repeats this date every month)':'Due on (repeats this date every year)'}
 $('tpop-rep').querySelectorAll('button').forEach(b=>b.onclick=()=>{tRep=b.dataset.r;if(tRep&&!$('tpop-date').value)$('tpop-date').value=today;repMark()});
-function openTodo(id){const o=items.get(id);if(!o)return;tId=id;$('tpop-text').value=o.text;tWhen=o.when==null?null:o.when;tMark();
+function openTodo(id){const o=items.get(id);if(!o)return;tId=id;$('tpop-text').value=o.text;tWhen=o.when==null?null:o.when;tWcat=o.wcat||null;tMark();
   tRep=o.rep||'';$('tpop-date').value=o.rep?(isDueRep(o)?dueKey(o):nextRep(o)):'';repMark();$('tpop-del').textContent='Delete';$('tpop').hidden=false}
 function closeTodo(){tId=null;$('tpop').hidden=true}
 $('tpop').addEventListener('click',e=>{if(e.target===$('tpop'))closeTodo()});
@@ -804,8 +825,8 @@ $('tpop-form').onsubmit=e=>{e.preventDefault();const o=items.get(tId);if(!o){clo
   if(tRep){const d=$('tpop-date').value||today;closeTodo();
     const changed=o.rep!==tRep||(isDueRep(o)?dueKey(o):nextRep(o))!==d;const n={...o,text:t,rep:tRep,repDate:changed?d:o.repDate,lastDone:changed?null:o.lastDone};put(n);
     if(changed)toast('Repeats '+(tRep==='month'?'monthly':'yearly')+(isDueRep(n)?', due today':', next '+fmtD(nextRep(n))));return}
-  const moved=(o.when??null)!==tWhen||!!o.rep;closeTodo();
-  const n={...o,text:t,when:tWhen,created:moved?Date.now():o.created};delete n.rep;delete n.repDate;delete n.lastDone;put(n);
+  const moved=(o.when??null)!==tWhen||!!o.rep||(tWhen==='work'&&(o.wcat||null)!==tWcat);closeTodo();
+  const n={...o,text:t,when:tWhen,created:moved?Date.now():o.created};if(tWhen==='work'){if(tWcat)n.wcat=tWcat;else delete n.wcat}else delete n.wcat;delete n.rep;delete n.repDate;delete n.lastDone;put(n);
   if(moved)toast('Moved to '+(tWhen==null?'Long term':tWhen==='work'?'Work':DFULL[tWhen]))};
 $('tpop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.textContent='Tap again to delete';setTimeout(()=>{b.textContent='Delete'},3000);return}
   const o=items.get(tId);closeTodo();if(o)remove([o],'Deleted "'+o.text+'"')};
@@ -843,10 +864,11 @@ $('spop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b
 /* ---------- quick add ---------- */
 let qTo=null;
 function qOptions(){const dow=new Date().getDay();
+  if(tab==='todo'&&todoMode==='work'){const cs=listOf('workcat');return [...cs.map(c=>({k:'wc:'+c.id,l:c.name})),{k:'wc:',l:cs.length?'Unsorted':'Work'}]}
   if(tab==='todo')return [{k:'d'+dow,l:'Today'},...ORDER.filter(d=>d!==dow).map(d=>({k:'d'+d,l:DN[d]})),{k:'work',l:'Work'},{k:'later',l:'Long term'}];
   if(tab==='shopping')return listOf('shopgroup').map(g=>({k:g.id,l:g.name}));
   return null}
-function openQuick(){if(tab==='todo')qTo=todoMode==='work'?'work':(qTo==='work'?null:qTo);if(tab==='grocery'){openGItem(null);return}if(tab==='notes'){openNote=newId();render();return}const opts=qOptions();$('qpop-lbl').textContent='Add to '+TITLES[tab];$('qpop-text').value='';
+function openQuick(){if(tab==='todo'&&todoMode!=='work'&&qTo&&String(qTo).startsWith('wc:'))qTo=null;if(tab==='grocery'){openGItem(null);return}if(tab==='notes'){openNote=newId();render();return}const opts=qOptions();$('qpop-lbl').textContent='Add to '+TITLES[tab];$('qpop-text').value='';
   $('qpop-tlbl').hidden=$('qpop-to').hidden=!opts;
   if(opts){if(!qTo||!opts.some(o=>o.k===qTo))qTo=opts[0].k;
     $('qpop-to').replaceChildren(...opts.map(o=>h('button',{type:'button','data-k':o.k,'aria-pressed':String(o.k===qTo),onclick:()=>{qTo=o.k;$('qpop-to').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===qTo)))}},o.l)))}
@@ -857,7 +879,8 @@ $('qpop').addEventListener('click',e=>{if(e.target===$('qpop'))closeQuick()});
 $('qpop-form').onsubmit=e=>{e.preventDefault();const v=$('qpop-text').value.trim();if(!v){$('qpop-text').focus();return}
   const list=LIST[tab];if(!list)return closeQuick();
   const o={id:newId(),list,text:v,done:false,doneOn:null,created:Date.now()};let where=TITLES[tab];
-  if(list==='todo'){o.when=qTo==='later'?null:qTo==='work'?'work':+qTo.slice(1);where=qTo==='later'?'Long term':qTo==='work'?'Work':DFULL[o.when];openGroups.add('todo-'+qTo);openGroups.delete('todo-'+qTo+'-x')}
+  if(list==='todo'&&String(qTo).startsWith('wc:')){o.when='work';const c=qTo.slice(3);if(c)o.wcat=c;const cc=c&&items.get(c);where=cc?cc.name:'Work'}
+  else if(list==='todo'){o.when=qTo==='later'?null:qTo==='work'?'work':+qTo.slice(1);where=qTo==='later'?'Long term':qTo==='work'?'Work':DFULL[o.when];openGroups.add('todo-'+qTo);openGroups.delete('todo-'+qTo+'-x')}
   if(list==='shop'){o.group=qTo;if(myId)o.by=myId;const g=items.get(qTo);where=g?g.name:'Shopping';openGroups.add(qTo)}
   saveOpen();
   const go=()=>{if(list==='shop'){const old=[...items.values()].find(x=>x.list==='shop'&&x.archived&&norm(x.text)===norm(v));
@@ -865,6 +888,22 @@ $('qpop-form').onsubmit=e=>{e.preventDefault();const v=$('qpop-text').value.trim
     put(o);toast('Added to '+where)};
   closeQuick();const twin=findDup(list,v);if(twin)askDup(twin,go,()=>{});else go()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('spop').hidden)closeShop();if(!$('qpop').hidden)closeQuick()}});
+/* ---------- work categories ---------- */
+let wcId=null;
+function openWCat(id){wcId=id;const c=id&&items.get(id);$('wpop-lbl').textContent=c?'Rename category':'New category';$('wpop-text').value=c?c.name:'';
+  $('wpop-del').hidden=!c;$('wpop-del').textContent='Delete';$('wpop').hidden=false;setTimeout(()=>$('wpop-text').focus(),30)}
+function closeWCat(){wcId=null;$('wpop').hidden=true}
+$('wpop').addEventListener('click',e=>{if(e.target===$('wpop'))closeWCat()});
+$('wpop-form').onsubmit=e=>{e.preventDefault();const name=$('wpop-text').value.trim();if(!name){$('wpop-text').focus();return}
+  const c=wcId&&items.get(wcId);closeWCat();
+  if(c)put({...c,name});else put({id:newId(),list:'workcat',name,created:Date.now()})};
+$('wpop-del').onclick=e=>{const b=e.currentTarget;const c=items.get(wcId);if(!c)return;
+  const its=[...items.values()].filter(o=>o.list==='todo'&&o.wcat===c.id);
+  if(b.textContent==='Delete'){b.textContent=its.length?'Tap again: '+its.length+' item'+(its.length>1?'s':'')+' move to Unsorted':'Tap again to delete';setTimeout(()=>{b.textContent='Delete'},3000);return}
+  closeWCat();const prev=its.map(o=>({...o}));
+  its.forEach(o=>{const n={...o};delete n.wcat;put(n,true)});items.delete(c.id);persist(c.id);render();
+  toast('Deleted '+c.name,()=>{put({...c},true);prev.forEach(o=>put(o,true));render()})};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('wpop').hidden)closeWCat()});
 /* ---------- tabs ---------- */
 const TABS=['routine','todo','grocery','shopping','notes'];
 function show(t){tab=TABS.includes(t)?t:'routine';if(tab!=='notes')openNote=null;render();window.scrollTo(0,0)}
