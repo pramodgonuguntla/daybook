@@ -53,7 +53,7 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .head{position:sticky;top:env(safe-area-inset-top,0px);z-index:8;background:var(--bg);padding:18px 20px 10px}
 .titlebar{display:flex;align-items:center;justify-content:space-between;gap:12px}
-h1{font-family:var(--body);font-weight:700;font-size:26px;letter-spacing:-.01em;margin:0;line-height:1.15}
+h1{white-space:nowrap;font-family:var(--body);font-weight:700;font-size:26px;letter-spacing:-.01em;margin:0;line-height:1.15}
 .sub{color:var(--sub);font-size:14px;min-height:1.3em;margin-top:2px}
 .subrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .subrow .sub{flex:1;min-width:0}
@@ -619,7 +619,7 @@ function render(){
         open?h('ul',{class:'tlist'},g.due.map((o,i)=>todoRow(o,i+1,true)),g.its.map((o,i)=>todoRow(o,g.due.length+i+1)),g.noAdd?null:addRow(list,g.key)):null)}));
     }
   } else ul=h('ul',null,rows.map(rowFor),addRow(list));
-  const head=[h('div',{class:'titlebar'},h('h1',null,TITLES[tab]),h('div',{class:'tright'},searchBtn(),plusBtn(),tab==='shopping'?h('button',{class:'addlist',type:'button',onclick:()=>openGroup(null)},'New list'):null,tab==='todo'&&todoMode==='work'?h('button',{class:'addlist',type:'button',onclick:()=>openWCat(null)},'New category'):null,avatarBtn()))];
+  const head=[h('div',{class:'titlebar'},h('h1',null,TITLES[tab]),h('div',{class:'tright'},searchBtn(),plusBtn(),tab==='shopping'?h('button',{class:'addlist',type:'button',onclick:()=>openGroup(null)},'New list'):null,tab==='todo'&&todoMode==='work'?h('button',{class:'addlist',type:'button',onclick:()=>openWCat(null)},'+ Category'):null,avatarBtn()))];
   if(tab==='todo')head.push(h('div',{class:'dtabs',role:'tablist','aria-label':'List'},[['personal','Personal'],['work','Work']].map(([k,l])=>h('button',{class:'dtab',type:'button',role:'tab','aria-selected':String(todoMode===k),onclick:()=>{todoMode=k;try{localStorage.setItem('daybook.todomode',k)}catch(e){}render();window.scrollTo(0,0)}},l))));
   if(tab==='routine')head.push(h('div',{class:'dtabs',role:'tablist','aria-label':'Day'},ORDER.map(d=>h('button',{class:'dtab'+(d===todayDow?' today':''),type:'button',role:'tab','aria-selected':String(d===selDay),'aria-label':DFULL[d]+(d===todayDow?' (today)':''),onclick:()=>{selDay=d;render()}},DN[d]))));
   const subEl=h('div',{class:'sub'},mode==='loading'?'Loading…':sub);
