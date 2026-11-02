@@ -159,6 +159,7 @@ li.off .tick{border-style:dashed}
 .dupt{margin:0;font-size:20px}
 .dupmsg{margin:0 0 6px;color:var(--ink);overflow-wrap:anywhere}
 
+.seg2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 /* search */
 .sbar{display:flex;gap:10px;align-items:center;margin-top:12px}
 .sbar input{flex:1;min-width:0;height:44px;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:0 14px;font-size:15px;color:var(--ink)}
@@ -185,10 +186,19 @@ li.dragging{position:relative;z-index:5;box-shadow:0 6px 18px rgba(0,0,0,.14)}
 li.shifting{transition:transform .15s}
 body.noselect{user-select:none;-webkit-user-select:none}
 
+/* notes */
+.note-row{display:block;width:100%;text-align:left;border:0;background:var(--card);padding:12px 14px;min-height:60px}
+.note-row+.note-row{border-top:1px solid var(--line2)}
+.note-row b{display:block;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.note-row span{display:block;color:var(--sub);font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.back{height:40px;border:0;background:transparent;color:var(--accent);font-weight:600;font-size:15px;padding:0}
+.notedel{height:40px;border:1px solid var(--line);background:var(--neg-bg);color:var(--neg);border-radius:12px;padding:0 14px;font-weight:600;font-size:14px}
+.notecard{padding:14px}
+.page{display:block;width:100%;min-height:55vh;border:0;background:transparent;line-height:1.55;resize:none;padding:0;overflow:auto;field-sizing:fixed}
 /* bottom bar */
 nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:480px;z-index:20;background:var(--card);border-top:1px solid var(--line);
   padding:0 env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
-nav div{display:grid;grid-template-columns:repeat(4,1fr)}
+nav div{display:grid;grid-template-columns:repeat(5,1fr)}
 nav button{position:relative;height:64px;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--sub);font-weight:600;font-size:11px;padding:0}
 nav button svg{width:22px;height:22px}
 nav button[aria-selected="true"]{color:var(--accent)}
@@ -234,6 +244,7 @@ img{max-width:100%}
   <button role="tab" data-tab="todo"><span class="badge" hidden></span><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/></svg>To-do</button>
   <button role="tab" data-tab="grocery"><span class="badge" hidden></span><svg viewBox="0 0 24 24"><path d="M3 4h2l2.2 10.5a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>Grocery</button>
   <button role="tab" data-tab="shopping"><span class="badge" hidden></span><svg viewBox="0 0 24 24"><path d="M5 8h14l-1.3 11.5H6.3z"/><path d="M9 8V6.5a3 3 0 016 0V8"/></svg>Shopping</button>
+  <button role="tab" data-tab="notes"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9 12.5h6M9 16h4"/></svg>Notes</button>
 </div></nav>
 
 <div class="backdrop" id="pop" hidden>
@@ -257,7 +268,7 @@ img{max-width:100%}
     <div id="tpop-movewrap" style="display:flex;flex-direction:column;gap:16px">
     <div class="lbl">Move to</div>
     <div class="dayset" id="tpop-days"></div>
-    <button type="button" class="later" id="tpop-later" aria-pressed="false">Long term</button>
+    <div class="seg2"><button type="button" class="later" id="tpop-work" aria-pressed="false">Work</button><button type="button" class="later" id="tpop-later" aria-pressed="false">Long term</button></div>
     </div>
     <div class="sheet-bar"><button class="rm" type="button" id="tpop-del">Delete</button><button class="save" type="submit">Save</button></div>
   </form>
@@ -355,7 +366,7 @@ function remove(arr,msg){arr.forEach(o=>{items.delete(o.id);persist(o.id)});rend
   toast(msg,()=>{arr.forEach(o=>{items.set(o.id,o);persist(o.id)});render()})}
 
 /* ---------- views ---------- */
-const TITLES={routine:'Routine',todo:'To-do',grocery:'Grocery',shopping:'Shopping'};
+const TITLES={routine:'Routine',todo:'To-do',grocery:'Grocery',shopping:'Shopping',notes:'Notes'};
 const LIST={routine:'routine',todo:'todo',grocery:'grocery',shopping:'shop'};
 let tab='routine', openNote=null, selDay=new Date().getDay();
 const ORDER=[1,2,3,4,5,6,0], DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], DFULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -488,7 +499,7 @@ const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9\u0900-\u0fff]+/g,'')
 const DUPLISTS=['routine','todo','shop','grocery'];
 function findDup(list,v){const n=norm(v);if(!n)return null;const all=[...items.values()].filter(o=>DUPLISTS.includes(o.list)&&!o.archived&&norm(o.text)===n);return all.find(o=>o.list===list)||all[0]||null}
 function whereOf(o){
-  if(o.list==='todo')return 'To-do ('+(o.rep?'Repeating':o.when==null?'Long term':DFULL[o.when])+')';
+  if(o.list==='todo')return 'To-do ('+(o.rep?'Repeating':o.when==null?'Long term':o.when==='work'?'Work':DFULL[o.when])+')';
   if(o.list==='note')return 'Notes';
   if(o.list==='grocery')return 'Grocery'+(o.need?' (to buy)':' ('+(o.cat||'Other')+')');
   if(o.list==='shop'){const g=o.group&&items.get(o.group);return 'Shopping ('+(g?g.name:'Other')+')'}
@@ -504,7 +515,7 @@ function addRow(list,group){
     onblur:e=>commit(e.target,false)});
   function commit(t,keep){const v=t.value.trim();if(!v||dupOpen)return;
     const add=()=>{t.value='';grow(t);
-      const o={id:newId(),list,text:v,done:false,doneOn:null,created:Date.now()};if(list==='todo'){o.when=group==='later'?null:+String(group).slice(1)}else if(group)o.group=group;
+      const o={id:newId(),list,text:v,done:false,doneOn:null,created:Date.now()};if(list==='todo'){o.when=group==='later'?null:group==='work'?'work':+String(group).slice(1)}else if(group)o.group=group;
       if(list==='shop'){if(myId)o.by=myId;const old=[...items.values()].find(x=>x.list==='shop'&&x.archived&&norm(x.text)===norm(v));
         if(old){put({...old,archived:false,done:false,group:group||old.group,by:myId||old.by,created:Date.now()});if(keep)setTimeout(()=>{const n=$(aid);if(n)n.focus()},0);return}}
       put(o);
@@ -534,6 +545,7 @@ function render(){
 
   if(searchOn){drawResults();return}
   if(tab==='grocery')return renderGrocery(main);
+  if(tab==='notes')return renderNotes(main);
   const list=LIST[tab], all=listOf(list).filter(o=>!o.archived);
   const now=new Date(), todayDow=now.getDay();
   const pendFirst=a=>[...a.filter(o=>!isDone(o)),...a.filter(isDone)];
@@ -577,7 +589,7 @@ function render(){
       off.length?h('ul',{class:'offlist'},off.map(offRow)):null);
   } else if(tab==='todo'){
     const plain=rows.filter(o=>!o.rep), reps=rows.filter(o=>o.rep), due=reps.filter(isDueRep);
-    const G=[...ORDER.map(d=>({key:'d'+d,name:DFULL[d]+(d===todayDow?' · Today':''),its:plain.filter(o=>o.when===d),due:d===todayDow?due:[]})),{key:'later',name:'Long term',its:plain.filter(o=>o.when==null),due:[]},{key:'rep',name:'Repeating',its:reps.slice().sort((a,b)=>nextRep(a)<nextRep(b)?-1:1),due:[],noAdd:true}];
+    const G=[...ORDER.map(d=>({key:'d'+d,name:DFULL[d]+(d===todayDow?' · Today':''),its:plain.filter(o=>o.when===d),due:d===todayDow?due:[]})),{key:'work',name:'Work',its:plain.filter(o=>o.when==='work'),due:[]},{key:'later',name:'Long term',its:plain.filter(o=>o.when==null),due:[]},{key:'rep',name:'Repeating',its:reps.slice().sort((a,b)=>nextRep(a)<nextRep(b)?-1:1),due:[],noAdd:true}];
     const ti=G.findIndex(g=>g.key==='d'+todayDow);if(ti>0)G.unshift(...G.splice(ti,1));
     ul=h('div',null,G.map(g=>{const k='todo-'+g.key, open=openGroups.has(k)||(!openGroups.has(k+'-x')&&g.key==='d'+todayDow);
       const tog=()=>{if(open){openGroups.delete(k);openGroups.add(k+'-x')}else{openGroups.add(k);openGroups.delete(k+'-x')}saveOpen();render()};
@@ -590,7 +602,7 @@ function render(){
   if(tab==='routine')head.push(h('div',{class:'dtabs',role:'tablist','aria-label':'Day'},ORDER.map(d=>h('button',{class:'dtab'+(d===todayDow?' today':''),type:'button',role:'tab','aria-selected':String(d===selDay),'aria-label':DFULL[d]+(d===todayDow?' (today)':''),onclick:()=>{selDay=d;render()}},DN[d]))));
   const subEl=h('div',{class:'sub'},mode==='loading'?'Loading…':sub);
   if(tab==='todo'||tab==='shopping'){
-    const keys=tab==='todo'?[...ORDER.map(d=>'d'+d),'later','rep']:[...listOf('shopgroup').map(g=>g.id),'_other'];
+    const keys=tab==='todo'?[...ORDER.map(d=>'d'+d),'work','later','rep']:[...listOf('shopgroup').map(g=>g.id),'_other'];
     const isOpen=k=>tab==='todo'?(openGroups.has('todo-'+k)||(!openGroups.has('todo-'+k+'-x')&&k==='d'+todayDow)):openGroups.has(k);
     const anyOpen=keys.some(isOpen);
     const toggleAll=()=>{keys.forEach(k=>{if(tab==='todo'){if(anyOpen){openGroups.delete('todo-'+k);openGroups.add('todo-'+k+'-x')}else{openGroups.add('todo-'+k);openGroups.delete('todo-'+k+'-x')}}
@@ -679,8 +691,8 @@ function openSearch(){searchOn=true;
 function closeSearch(){searchOn=false;sIn=sBox=null;render()}
 function hl(text,q){const i=text.toLowerCase().indexOf(q);if(!q||i<0)return text;return [text.slice(0,i),h('mark',null,text.slice(i,i+q.length)),text.slice(i+q.length)]}
 function drawResults(){if(!sBox)return;const q=sIn.value.trim().toLowerCase();
-  if(!q){sBox.replaceChildren(h('div',{class:'empty'},'Type to find anything in Routine, To-do, Grocery and Shopping.'));return}
-  const hits=[...items.values()].filter(o=>!o.archived&&['routine','todo','shop','grocery'].includes(o.list))
+  if(!q){sBox.replaceChildren(h('div',{class:'empty'},'Type to find anything in Routine, To-do, Grocery, Shopping and Notes.'));return}
+  const hits=[...items.values()].filter(o=>!o.archived&&['routine','todo','shop','grocery','note'].includes(o.list))
     .map(o=>({o,t:o.list==='note'?noteText(o):o.text})).filter(x=>x.t&&x.t.toLowerCase().includes(q)).slice(0,60);
   sBox.replaceChildren(...(hits.length?hits.map(({o,t})=>{const line=o.list==='note'?(t.split('\n').find(l=>l.toLowerCase().includes(q))||t.split('\n')[0]):t;
     return h('button',{class:'sres',type:'button',onclick:()=>goTo(o)},h('b',null,hl(line,q)),h('span',null,whereOf(o)))}):[h('div',{class:'empty'},'Nothing found.')]))}
@@ -696,23 +708,26 @@ function renderNotes(main){
     const n=items.get(openNote)||{id:openNote,list:'note',body:'',created:Date.now()};
     if(document.activeElement&&document.activeElement.id==='page')return;
     let timer;
-    const page=h('textarea',{class:'page',id:'page',value:n.body||'',placeholder:'Start writing…','aria-label':'Note',
+    const page=h('textarea',{class:'page',id:'page',value:n.body||'',placeholder:'Start writing… The first line becomes the title.','aria-label':'Note',
       oninput:e=>{clearTimeout(timer);const v=e.target.value;timer=setTimeout(()=>saveNote(v),600)},
       onblur:e=>{clearTimeout(timer);saveNote(e.target.value)}});
     main.replaceChildren(
-      h('button',{class:'back',type:'button',onclick:closeNote},'‹ All notes'),
-      page,
-      h('div',{class:'note-foot'},h('button',{type:'button',onpointerdown:e=>e.preventDefault(),onclick:()=>{const cur=items.get(openNote);openNote=null;if(cur)remove([cur],'Note deleted');else render()}},'Delete note')));
+      h('div',{class:'head'},h('div',{class:'titlebar'},
+        h('button',{class:'back',type:'button',onclick:closeNote},'‹ Notes'),
+        h('button',{class:'notedel',type:'button',onpointerdown:e=>e.preventDefault(),onclick:()=>{const cur=items.get(openNote);openNote=null;if(cur)remove([cur],'Note deleted');else render()}},'Delete'))),
+      h('div',{class:'card notecard'},page));
     if(!n.body)setTimeout(()=>page.focus(),30);
     return;
   }
   const ns=[...items.values()].filter(i=>i.list==='note').sort((a,b)=>b.updated-a.updated);
-  main.replaceChildren(h('div',{class:'titlebar'},h('h1',null,'Notes'),h('div',{class:'tright'},searchBtn())),h('div',{class:'sub'},mode==='loading'?'Loading…':''),
-    ns.length?h('div',null,ns.map(n=>{const lines=noteText(n).split('\n').filter(l=>l.trim());
-      return h('button',{class:'note-row',type:'button',onclick:()=>{openNote=n.id;render()}},h('b',null,lines[0]||'Empty note'),h('span',null,lines.slice(1).join(' · ')||' '))}))
-      :(mode==='loading'?null:h('div',{class:'empty'},'Write down anything longer here.')),
-    h('button',{class:'new',type:'button',onclick:()=>{openNote=newId();render()}},'New note'),
-    window.daybookUser?h('div',{class:'who-foot'},'Signed in as '+window.daybookUser.email,h('button',{type:'button',onclick:()=>window.daybookSignOut()},'Sign out')):null);
+  const when=t=>{const d=new Date(t);return dkey(d)===today?'Today '+fmtT(pad(d.getHours())+':'+pad(d.getMinutes())):d.getDate()+' '+MON[d.getMonth()]};
+  main.replaceChildren(
+    h('div',{class:'head'},h('div',{class:'titlebar'},h('h1',null,'Notes'),h('div',{class:'tright'},searchBtn(),plusBtn(),avatarBtn())),
+      h('div',{class:'sub'},mode==='loading'?'Loading…':ns.length?ns.length+' note'+(ns.length>1?'s':''):'')),
+    ns.length?h('div',{class:'card'},ns.map(n=>{const lines=noteText(n).split('\n').filter(l=>l.trim());
+      return h('button',{class:'note-row',type:'button',onclick:()=>{openNote=n.id;render()}},
+        h('b',null,lines[0]||'Empty note'),h('span',null,when(n.updated)+(lines[1]?' · '+lines.slice(1).join(' '):'')))}))
+      :(mode==='loading'?null:h('div',{class:'card empty'},'Tap + to write a note: numbers, ideas, addresses, anything longer.')));
 }
 const noteText=n=>((n.title?n.title+'\n':'')+(n.body||'')).trim();
 function saveNote(v){if(!openNote)return;const cur=items.get(openNote);
@@ -764,9 +779,10 @@ $('pop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.
 /* ---------- shopping list pop-up ---------- */
 let gId=null;
 let tId=null,tWhen=null;
-function tMark(){$('tpop-days').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.d===tWhen)));$('tpop-later').setAttribute('aria-pressed',String(tWhen==null))}
+function tMark(){$('tpop-days').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.d===tWhen)));$('tpop-later').setAttribute('aria-pressed',String(tWhen==null));$('tpop-work').setAttribute('aria-pressed',String(tWhen==='work'))}
 ORDER.forEach(d=>$('tpop-days').append(h('button',{type:'button','data-d':d,'aria-label':DFULL[d],onclick:()=>{tWhen=d;tMark()}},DN[d])));
 $('tpop-later').onclick=()=>{tWhen=null;tMark()};
+$('tpop-work').onclick=()=>{tWhen='work';tMark()};
 let tRep='';
 function repMark(){$('tpop-rep').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.r===tRep)));
   $('tpop-repwrap').hidden=!tRep;$('tpop-movewrap').hidden=!!tRep;$('tpop-replbl').textContent=tRep==='month'?'Due on (repeats this date every month)':'Due on (repeats this date every year)'}
@@ -783,7 +799,7 @@ $('tpop-form').onsubmit=e=>{e.preventDefault();const o=items.get(tId);if(!o){clo
     if(changed)toast('Repeats '+(tRep==='month'?'monthly':'yearly')+(isDueRep(n)?', due today':', next '+fmtD(nextRep(n))));return}
   const moved=(o.when??null)!==tWhen||!!o.rep;closeTodo();
   const n={...o,text:t,when:tWhen,created:moved?Date.now():o.created};delete n.rep;delete n.repDate;delete n.lastDone;put(n);
-  if(moved)toast('Moved to '+(tWhen==null?'Long term':DFULL[tWhen]))};
+  if(moved)toast('Moved to '+(tWhen==null?'Long term':tWhen==='work'?'Work':DFULL[tWhen]))};
 $('tpop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.textContent='Tap again to delete';setTimeout(()=>{b.textContent='Delete'},3000);return}
   const o=items.get(tId);closeTodo();if(o)remove([o],'Deleted "'+o.text+'"')};
 function closeDup(useIt){$('dup').hidden=true;const y=dupYes,n=dupNo;dupYes=dupNo=null;setTimeout(()=>{dupOpen=false},50);(useIt?y:n)&&(useIt?y:n)()}
@@ -820,10 +836,10 @@ $('spop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b
 /* ---------- quick add ---------- */
 let qTo=null;
 function qOptions(){const dow=new Date().getDay();
-  if(tab==='todo')return [{k:'d'+dow,l:'Today'},...ORDER.filter(d=>d!==dow).map(d=>({k:'d'+d,l:DN[d]})),{k:'later',l:'Long term'}];
+  if(tab==='todo')return [{k:'d'+dow,l:'Today'},...ORDER.filter(d=>d!==dow).map(d=>({k:'d'+d,l:DN[d]})),{k:'work',l:'Work'},{k:'later',l:'Long term'}];
   if(tab==='shopping')return listOf('shopgroup').map(g=>({k:g.id,l:g.name}));
   return null}
-function openQuick(){if(tab==='grocery'){openGItem(null);return}const opts=qOptions();$('qpop-lbl').textContent='Add to '+TITLES[tab];$('qpop-text').value='';
+function openQuick(){if(tab==='grocery'){openGItem(null);return}if(tab==='notes'){openNote=newId();render();return}const opts=qOptions();$('qpop-lbl').textContent='Add to '+TITLES[tab];$('qpop-text').value='';
   $('qpop-tlbl').hidden=$('qpop-to').hidden=!opts;
   if(opts){if(!qTo||!opts.some(o=>o.k===qTo))qTo=opts[0].k;
     $('qpop-to').replaceChildren(...opts.map(o=>h('button',{type:'button','data-k':o.k,'aria-pressed':String(o.k===qTo),onclick:()=>{qTo=o.k;$('qpop-to').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===qTo)))}},o.l)))}
@@ -834,7 +850,7 @@ $('qpop').addEventListener('click',e=>{if(e.target===$('qpop'))closeQuick()});
 $('qpop-form').onsubmit=e=>{e.preventDefault();const v=$('qpop-text').value.trim();if(!v){$('qpop-text').focus();return}
   const list=LIST[tab];if(!list)return closeQuick();
   const o={id:newId(),list,text:v,done:false,doneOn:null,created:Date.now()};let where=TITLES[tab];
-  if(list==='todo'){o.when=qTo==='later'?null:+qTo.slice(1);where=qTo==='later'?'Long term':DFULL[o.when];openGroups.add('todo-'+qTo);openGroups.delete('todo-'+qTo+'-x')}
+  if(list==='todo'){o.when=qTo==='later'?null:qTo==='work'?'work':+qTo.slice(1);where=qTo==='later'?'Long term':qTo==='work'?'Work':DFULL[o.when];openGroups.add('todo-'+qTo);openGroups.delete('todo-'+qTo+'-x')}
   if(list==='shop'){o.group=qTo;if(myId)o.by=myId;const g=items.get(qTo);where=g?g.name:'Shopping';openGroups.add(qTo)}
   saveOpen();
   const go=()=>{if(list==='shop'){const old=[...items.values()].find(x=>x.list==='shop'&&x.archived&&norm(x.text)===norm(v));
@@ -843,7 +859,7 @@ $('qpop-form').onsubmit=e=>{e.preventDefault();const v=$('qpop-text').value.trim
   closeQuick();const twin=findDup(list,v);if(twin)askDup(twin,go,()=>{});else go()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('spop').hidden)closeShop();if(!$('qpop').hidden)closeQuick()}});
 /* ---------- tabs ---------- */
-const TABS=['routine','todo','grocery','shopping'];
+const TABS=['routine','todo','grocery','shopping','notes'];
 function show(t){tab=TABS.includes(t)?t:'routine';if(tab!=='notes')openNote=null;render();window.scrollTo(0,0)}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{if(document.activeElement)document.activeElement.blur();location.hash=b.dataset.tab;show(b.dataset.tab)});
 window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
