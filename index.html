@@ -149,7 +149,8 @@ li.off .tick{border-style:dashed}
 .remrow input{flex:none}
 .calbtn{height:48px;display:inline-flex;align-items:center;border:1.5px solid var(--accent);color:var(--accent);border-radius:14px;padding:0 14px;font-weight:600;text-decoration:none}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:12px;color:var(--sub);font-weight:600}
-.week i{display:block;margin:6px auto 0;width:14px;height:14px;border-radius:50%;border:2px solid var(--line)}
+.week .wday{border:0;background:transparent;padding:4px 0;font:inherit;color:inherit;font-size:12px;font-weight:600}
+.week i{display:block;margin:6px auto 0;width:22px;height:22px;border-radius:50%;border:2px solid var(--line)}
 .week i.y{background:var(--accent);border-color:var(--accent)}
 .week i.n{border-color:var(--faint)}
 .week i.x{border-style:dashed;opacity:.5}
@@ -796,13 +797,24 @@ function popSave(){const o=items.get(popId);if(!o)return;const t=$('pop-text').v
   else if(!onDay(o,dw)&&onDay(n,dw)&&(o.breaks||[]).includes(today))n.breaks=o.breaks.filter(k=>k!==today);
   put(n)}
 $('pop-cal').addEventListener('click',()=>{popSave();setTimeout(closePop,300)});
+/* last 7 days: tap a day to mark it done or not done */
+function drawWeek(id){const o=items.get(id);if(!o)return;
+  const H=new Set(histOf(o)), st=streak(o);
+  $('pop-wlbl').textContent='Last 7 days'+(st>=1?' · 🔥 '+st+'-day streak':'')+' · tap to fix';
+  $('pop-week').replaceChildren(...[6,5,4,3,2,1,0].map(i=>{const k=addDays(today,-i),d=k2d(k).getDay();
+    const cls=!onDay(o,d)?'x':H.has(k)?'y':'n';
+    return h('button',{type:'button',class:'wday','aria-label':(H.has(k)?'Unmark ':'Mark done ')+DFULL[d],onclick:()=>{
+      const cur=items.get(id);if(!cur)return;const HH=new Set(histOf(cur));const on=HH.has(k);
+      if(on)HH.delete(k);else HH.add(k);
+      const n={...cur,hist:[...HH].sort().slice(-400)};
+      if(k===today)n.doneOn=on?null:today;
+      if(!on&&n.breaks)n.breaks=n.breaks.filter(b=>b!==k);
+      put(n);drawWeek(id)}},i===0?'Today':DN[d],h('i',{class:cls}))}));
+}
 function openPop(id){const o=items.get(id);if(!o)return;popId=id;$('pop-text').value=o.text;$('pop-time').value=o.time||'';
   popDays=o.days?[...o.days]:[0,1,2,3,4,5,6];
   $('pop-days').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(popDays.includes(+b.dataset.d))));updCal();
-  const H=new Set(histOf(o)), dow=new Date().getDay(), mon=addDays(today,-((dow+6)%7)), st=streak(o);
-  $('pop-wlbl').textContent='This week'+(st>=2?' · 🔥 '+st+'-day streak':'');
-  $('pop-week').replaceChildren(...[0,1,2,3,4,5,6].map(i=>{const k=addDays(mon,i),d=k2d(k).getDay();
-    const cls=k>today?'f':!onDay(o,d)?'x':H.has(k)?'y':'n';return h('div',null,DN[d],h('i',{class:cls}))}));
+  drawWeek(id);
   $('pop-del').textContent='Delete';$('pop').hidden=false}
 function closePop(){popId=null;$('pop').hidden=true}
 $('pop').addEventListener('click',e=>{if(e.target===$('pop'))closePop()});
