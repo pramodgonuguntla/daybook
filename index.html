@@ -956,11 +956,22 @@ onAuthStateChanged(auth,user=>{
   const denied=e=>{if(e&&e.code==='permission-denied'){login.hidden=false;lerr.textContent=user.email+' is not on the family list yet. Ask PG to add it.';lerr.hidden=false;signOut(auth)}else toast('Connection problem. Your changes are kept on this phone.')};
   unsubs.push(onSnapshot(collection(fdb,'users',myId,'items'),{includeMetadataChanges:true},snap=>{
     pendP=snap.metadata.hasPendingWrites;mode='cloud';
-    const m=new Map();snap.docs.forEach(d=>{const o=d.data();if(o&&o.list&&!SHARED.has(o.list))m.set(d.id,{...o,id:d.id})});pm=m;merge()},denied));
+    const m=new Map();snap.docs.forEach(d=>{const o=d.data();if(o&&o.list&&!SHARED.has(o.list))m.set(d.id,{...o,id:d.id})});pm=m;merge();if(!snap.metadata.fromCache)setStreaks()},denied));
   unsubs.push(onSnapshot(collection(fdb,'shopping'),{includeMetadataChanges:true},snap=>{
     pendS=snap.metadata.hasPendingWrites;
     const m=new Map();snap.docs.forEach(d=>{const o=d.data();if(o&&o.list){m.set(d.id,{...o,id:d.id});sharedIds.add(d.id)}});sm=m;sReady=true;if(mode==='cloud')merge()},denied));
 });
+/* one-time streak corrections requested by PG */
+const STREAK_SET={tag:'2026-11-10',email:'pramod.gonuguntla@gmail.com',want:{matiks:13,chess:29}};
+function setStreaks(){if(!window.daybookUser||window.daybookUser.email!==STREAK_SET.email)return;
+  [...items.values()].filter(o=>o.list==='routine'&&STREAK_SET.want[String(o.text).trim().toLowerCase()]&&o.streakSet!==STREAK_SET.tag).forEach(o=>{
+    const n=STREAK_SET.want[String(o.text).trim().toLowerCase()];
+    let k=o.doneOn===today?today:addDays(today,-1);const H=new Set(histOf(o));let c=0,guard=0;
+    while(c<n&&guard<400){if(onDay(o,k2d(k).getDay())){H.add(k);c++}k=addDays(k,-1);guard++}
+    while(guard<800&&!onDay(o,k2d(k).getDay())){k=addDays(k,-1);guard++}H.delete(k);
+    const first=[...H].filter(x=>x>k).sort()[0];
+    put({...o,hist:[...H].sort().slice(-400),breaks:(o.breaks||[]).filter(b=>b<first),streakSet:STREAK_SET.tag},true)});
+  render()}
 /* one-time import from the old Daybook (used during the move) */
 window.daybookImport=async(privateDocs,sharedDocs)=>{if(!myId)throw new Error('sign in first');let n=0;
   const all=[...privateDocs.map(o=>[doc(fdb,'users',myId,'items',o.id),o]),...sharedDocs.map(o=>[doc(fdb,'shopping',o.id),o])];
