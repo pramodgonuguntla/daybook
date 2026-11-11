@@ -357,13 +357,17 @@ function h(tag,attrs,...kids){const e=document.createElement(tag);if(attrs)for(c
 let items=new Map(), mode='loading', today=dkey();
 const SHARED=new Set(['shop','shopgroup','grocery']), sharedIds=new Set();
 let myId=null, myName=''; const names={};
+/* each family has its own shared Grocery + Shopping space */
+const FAMILIES={'pramod.gonuguntla@gmail.com':'shopping','nashruthi@gmail.com':'shopping',
+  'saikrishna17101991@gmail.com':'shopping_sai','krishnachaitanya.1710@gmail.com':'shopping_sai'};
+let SHOPCOL='shopping';
 let pendP=false, pendS=false;
 function netBar(){const el=$('net');if(!el)return;const pend=pendP||pendS, off=!navigator.onLine;
   el.hidden=!off;el.textContent=pend?'Offline · changes saved on this phone, will sync':'Offline · showing your saved lists'}
 window.addEventListener('online',netBar);window.addEventListener('offline',netBar);
 function persist(id){if(!myId)return;const cur=items.get(id);if(cur&&SHARED.has(cur.list))sharedIds.add(id);
   const shared=cur?SHARED.has(cur.list):sharedIds.has(id);
-  const ref=shared?doc(fdb,'shopping',id):doc(fdb,'users',myId,'items',id);
+  const ref=shared?doc(fdb,SHOPCOL,id):doc(fdb,'users',myId,'items',id);
   const p=cur?setDoc(ref,JSON.parse(JSON.stringify(cur))):deleteDoc(ref);
   p.catch(e=>toast('Could not save ('+(e&&e.code||'error')+')'));netBar()}
 function put(o,quiet){o.updated=Date.now();if((o.list==='shop'||o.list==='grocery')&&o.by&&o.by===myId&&myName&&o.byName!==myName)o.byName=myName;items.set(o.id,o);persist(o.id);if(!quiet)render()}
@@ -961,15 +965,16 @@ window.daybookSignOut=()=>signOut(auth);
 onAuthStateChanged(auth,user=>{
   unsubs.forEach(u=>u());unsubs=[];
   if(!user){myId=null;items=new Map();mode='loading';login.hidden=false;try{localStorage.removeItem('daybook.who')}catch(e){};return}
+  SHOPCOL=FAMILIES[String(user.email||'').toLowerCase()]||'shopping';
   myId=user.uid;myName=(user.displayName||'').split(' ')[0]||user.email;window.daybookUser={name:user.displayName,email:user.email};try{localStorage.setItem('daybook.who',JSON.stringify(window.daybookUser))}catch(e){}
   login.hidden=true;
   let pm=new Map(), sm=new Map(), sReady=false;
   const merge=()=>{items=new Map([...pm,...sm]);render();netBar()};
-  const denied=e=>{if(e&&e.code==='permission-denied'){login.hidden=false;lerr.textContent=user.email+' is not on the family list yet. Ask PG to add it.';lerr.hidden=false;signOut(auth)}else toast('Connection problem. Your changes are kept on this phone.')};
+  const denied=e=>{if(e&&e.code==='permission-denied'){login.hidden=false;lerr.textContent=user.email+' is not on the family list yet. Ask Pramod to add it.';lerr.hidden=false;signOut(auth)}else toast('Connection problem. Your changes are kept on this phone.')};
   unsubs.push(onSnapshot(collection(fdb,'users',myId,'items'),{includeMetadataChanges:true},snap=>{
     pendP=snap.metadata.hasPendingWrites;mode='cloud';
     const m=new Map();snap.docs.forEach(d=>{const o=d.data();if(o&&o.list&&!SHARED.has(o.list))m.set(d.id,{...o,id:d.id})});pm=m;merge();if(!snap.metadata.fromCache)setStreaks()},denied));
-  unsubs.push(onSnapshot(collection(fdb,'shopping'),{includeMetadataChanges:true},snap=>{
+  unsubs.push(onSnapshot(collection(fdb,SHOPCOL),{includeMetadataChanges:true},snap=>{
     pendS=snap.metadata.hasPendingWrites;
     const m=new Map();snap.docs.forEach(d=>{const o=d.data();if(o&&o.list){m.set(d.id,{...o,id:d.id});sharedIds.add(d.id)}});sm=m;sReady=true;if(mode==='cloud')merge()},denied));
 });
@@ -986,7 +991,7 @@ function setStreaks(){if(!window.daybookUser||window.daybookUser.email!==STREAK_
   render()}
 /* one-time import from the old Daybook (used during the move) */
 window.daybookImport=async(privateDocs,sharedDocs)=>{if(!myId)throw new Error('sign in first');let n=0;
-  const all=[...privateDocs.map(o=>[doc(fdb,'users',myId,'items',o.id),o]),...sharedDocs.map(o=>[doc(fdb,'shopping',o.id),o])];
+  const all=[...privateDocs.map(o=>[doc(fdb,'users',myId,'items',o.id),o]),...sharedDocs.map(o=>[doc(fdb,SHOPCOL,o.id),o])];
   for(let i=0;i<all.length;i+=400){const b=writeBatch(fdb);all.slice(i,i+400).forEach(([r,o])=>{const c={...o};delete c.id;b.set(r,c);n++});await b.commit()}
   return n};
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
