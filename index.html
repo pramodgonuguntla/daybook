@@ -675,7 +675,7 @@ function renderGrocery(main){
   const needRow=o=>{const li=h('li',{'data-id':o.id},
       h('button',{class:'tick',type:'button',role:'checkbox','aria-checked':'false','aria-label':'Bought '+o.text,onclick:()=>{const cur=items.get(o.id);if(!cur)return;const prev={...cur};
         put({...cur,need:false});toast('Bought '+cur.text,()=>put(prev))}}),
-      h('button',{class:'rtext',type:'button',onclick:()=>openGItem(o.id)},o.text,h('span',{class:'meta'},(o.cat||'Other')+(o.by&&o.by!==myId&&(names[o.by]||o.byName)?' · added by '+(names[o.by]||o.byName):''))));
+      h('button',{class:'rtext',type:'button',onclick:()=>openGItem(o.id)},o.text,h('span',{class:'meta'},(o.cat||'Other')+(o.by?' · added by '+(names[o.by]||o.byName||(o.by===myId?(myName||'you'):'family')):''))));
     swipeable(li,o.id,cur=>{const prev={...cur};put({...cur,need:false});toast('Removed '+cur.text+' from the list',()=>put(prev))});return li};
   const nodes=[h('div',{class:'head'},head),h('div',{class:'label'},h('span',null,'To buy'),need.length?h('span',null,String(need.length)):null)];
   nodes.push(need.length?h('ul',null,need.map(needRow)):h('div',{class:'card empty'},'Tap items below to put them on the list.'));
@@ -695,7 +695,7 @@ function gchip(o){let t=null,long=false;
   return b}
 let giId=null,gCat=null;
 function gMark(){$('gsheet-cats').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===gCat)))}
-function openGItem(id,cat){const o=id&&items.get(id);giId=o?id:null;gCat=o?(o.cat||'Other'):(cat||'Vegetables & fruits');
+function openGItem(id,cat){const o=id&&items.get(id);giId=o?id:null;gCat=o?(o.cat||'Other'):(cat||'Other');
   $('gsheet-lbl').textContent=o?'Edit item':'New item';$('gsheet-text').value=o?o.text:'';$('gsheet-newcat').value='';
   $('gsheet-cats').replaceChildren(...gcats().map(c=>h('button',{type:'button','data-c':c,onclick:()=>{gCat=c;$('gsheet-newcat').value='';gMark()}},c)));gMark();
   $('gsheet-del').hidden=!o;$('gsheet-del').textContent='Delete';$('gsheet-save').textContent=o?'Save':'Add to list';
