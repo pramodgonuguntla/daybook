@@ -159,6 +159,8 @@ li.off .tick{border-style:dashed}
 .dupbox{border-radius:20px;max-width:380px;padding:20px!important;gap:10px}
 .dupt{margin:0;font-size:20px}
 .dupmsg{margin:0 0 6px;color:var(--ink);overflow-wrap:anywhere}
+.dupbtns{display:flex;flex-direction:column;gap:8px;margin-top:4px}.dupbtns button{width:100%}
+.dupalt{background:none;border:1px solid var(--line,#ddd);border-radius:12px;padding:12px;font:inherit;font-size:16px;color:var(--ink)}
 
 .seg2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 /* search */
@@ -282,7 +284,7 @@ img{max-width:100%}
   <div class="sheet dupbox" role="alertdialog" aria-labelledby="dup-t">
     <h2 id="dup-t" class="dupt">Exists already</h2>
     <p id="dup-msg" class="dupmsg"></p>
-    <div class="sheet-bar"><button class="rm plain" type="button" id="dup-add">Add anyway</button><button class="save" type="button" id="dup-ok">OK</button></div>
+    <div class="dupbtns"><button class="save" type="button" id="dup-move">Move here</button><button class="dupalt" type="button" id="dup-add">Add anyway</button><button class="dupalt" type="button" id="dup-ok">Cancel</button></div>
   </div>
 </div>
 <div class="backdrop" id="spop" hidden>
@@ -518,14 +520,20 @@ const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9\u0900-\u0fff]+/g,'')
 const DUPLISTS=['routine','todo','shop','grocery'];
 function findDup(list,v){const n=norm(v);if(!n)return null;const all=[...items.values()].filter(o=>DUPLISTS.includes(o.list)&&!o.archived&&norm(o.text)===n);return all.find(o=>o.list===list)||all[0]||null}
 function whereOf(o){
-  if(o.list==='todo')return 'To-do ('+(o.rep?'Repeating':o.when==null?'Long term':o.when==='work'?'Work':isPC(o.when)?pcName(o.when):DFULL[o.when])+')';
+  if(o.list==='todo')return 'To-do ('+(o.rep?'Repeating':o.when==null?'Long term':o.when==='work'?((o.wcat&&items.get(o.wcat))?'Work: '+items.get(o.wcat).name:'Work'):isPC(o.when)?pcName(o.when):DFULL[o.when])+')';
   if(o.list==='note')return 'Notes';
   if(o.list==='grocery')return 'Grocery'+(o.need?' (to buy)':' ('+(o.cat||'Other')+')');
   if(o.list==='shop'){const g=o.group&&items.get(o.group);return 'Shopping ('+(g?g.name:'Other')+')'}
   if(o.list==='routine')return 'Routine';return ''}
-let dupOpen=false,dupYes=null,dupNo=null;
-function askDup(o,yes,no){dupOpen=true;dupYes=yes;dupNo=no;
+let dupOpen=false,dupYes=null,dupNo=null,dupTwin=null;
+function askDup(o,yes,no,target){dupOpen=true;dupYes=yes;dupNo=no;dupTwin=o;
+  const same=target&&target.list===o.list&&whereOf(target)===whereOf(o);
+  $('dup-move').hidden=!target||same;
   $('dup-msg').textContent='"'+o.text+'" is already in '+whereOf(o)+'.';$('dup').hidden=false}
+function moveDup(){const tw=dupTwin,y=dupYes;$('dup').hidden=true;dupYes=dupNo=dupTwin=null;setTimeout(()=>{dupOpen=false},50);if(!tw||!y)return;
+  const before=new Map(items);items.delete(tw.id);persist(tw.id);y();
+  const changed=[...items.keys()].filter(k=>before.get(k)!==items.get(k));
+  render();toast('Moved',()=>{changed.forEach(k=>{const b=before.get(k);if(b)items.set(k,b);else items.delete(k);persist(k)});items.set(tw.id,tw);persist(tw.id);render()})}
 function addRow(list,group){
   const aid='add-'+list+(group?'-'+group:'');
   const ta=h('textarea',{rows:1,id:aid,placeholder:'Add item','aria-label':'Add item',
@@ -533,15 +541,15 @@ function addRow(list,group){
     onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();commit(e.target,true)}},
     onblur:e=>commit(e.target,false)});
   function commit(t,keep){const v=t.value.trim();if(!v||dupOpen)return;
+    const o={id:newId(),list,text:v,done:false,doneOn:null,created:Date.now()};if(list==='todo'){if(String(group).startsWith('work')){o.when='work';const c=String(group).slice(5);if(c)o.wcat=c}else if(String(group).startsWith('pc'))o.when='pc:'+String(group).slice(2);else o.when=group==='later'?null:+String(group).slice(1)}else if(group)o.group=group;
     const add=()=>{t.value='';grow(t);
-      const o={id:newId(),list,text:v,done:false,doneOn:null,created:Date.now()};if(list==='todo'){if(String(group).startsWith('work')){o.when='work';const c=String(group).slice(5);if(c)o.wcat=c}else if(String(group).startsWith('pc'))o.when='pc:'+String(group).slice(2);else o.when=group==='later'?null:+String(group).slice(1)}else if(group)o.group=group;
       if(list==='shop'){if(myId)o.by=myId;const old=[...items.values()].find(x=>x.list==='shop'&&x.archived&&norm(x.text)===norm(v));
         if(old){put({...old,archived:false,done:false,group:group||old.group,by:myId||old.by,created:Date.now()});if(keep)setTimeout(()=>{const n=$(aid);if(n)n.focus()},0);return}}
       put(o);
       if(keep)setTimeout(()=>{const n=$(aid);if(n)n.focus()},0)};
     const twin=findDup(list,v);
     if(!twin){add();return}
-    t.blur();askDup(twin,add,()=>{t.value='';grow(t)})}
+    t.blur();askDup(twin,add,()=>{t.value='';grow(t)},o)}
   return h('li',{class:'add'},h('span',{class:'tick','aria-hidden':'true'}),ta);
 }
 
@@ -598,7 +606,7 @@ function render(){
       if(!past.length)return null;
       return h('div',{class:'again'},h('span',{class:'lab'},'Buy again'),past.map(o=>h('button',{class:'chip',type:'button',onclick:()=>{
         const twin=findDup('shop',o.text);const go=()=>put({...o,archived:false,done:false,by:myId||o.by,created:Date.now()});
-        if(twin)askDup(twin,go,()=>{});else go()}},o.text)))}
+        if(twin)askDup(twin,go,()=>{},{...o,archived:false});else go()}},o.text)))}
     ul=h('div',null,secs);
     } else if(tab==='routine'){
     const off=all.filter(o=>!onDay(o,selDay));
@@ -713,7 +721,7 @@ $('gsheet-form').onsubmit=e=>{e.preventDefault();const v=$('gsheet-text').value.
   const twin=findDup('grocery',v);
   const go=()=>{if(twin&&twin.list==='grocery'){put({...twin,need:true,needAt:Date.now(),cat:twin.cat||cat});toast('Added '+twin.text);return}
     put({id:newId(),list:'grocery',text:v,cat,need:true,needAt:Date.now(),created:Date.now(),by:myId});toast('Added '+v)};
-  if(twin&&twin.list!=='grocery')askDup(twin,go,()=>{});else go()};
+  if(twin&&twin.list!=='grocery')askDup(twin,go,()=>{},{list:'grocery',need:true,cat});else go()};
 $('gsheet-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.textContent='Tap again to delete';setTimeout(()=>{b.textContent='Delete'},3000);return}
   const o=items.get(giId);closeGItem();if(o)remove([o],'Deleted '+o.text)};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('gsheet').hidden)closeGItem();if(!$('acct').hidden)$('acct').hidden=true}});
@@ -863,7 +871,7 @@ $('tpop-form').onsubmit=e=>{e.preventDefault();const o=items.get(tId);if(!o){clo
 $('tpop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.textContent='Tap again to delete';setTimeout(()=>{b.textContent='Delete'},3000);return}
   const o=items.get(tId);closeTodo();if(o)remove([o],'Deleted "'+o.text+'"')};
 function closeDup(useIt){$('dup').hidden=true;const y=dupYes,n=dupNo;dupYes=dupNo=null;setTimeout(()=>{dupOpen=false},50);(useIt?y:n)&&(useIt?y:n)()}
-$('dup-ok').onclick=()=>closeDup(false);$('dup-add').onclick=()=>closeDup(true);
+$('dup-ok').onclick=()=>closeDup(false);$('dup-move').onclick=moveDup;$('dup-add').onclick=()=>closeDup(true);
 $('dup').addEventListener('click',e=>{if(e.target===$('dup'))closeDup(false)});
 let openGroups=new Set();try{openGroups=new Set(JSON.parse(localStorage.getItem('daybook.open')||'[]'))}catch(e){}
 function saveOpen(){try{localStorage.setItem('daybook.open',JSON.stringify([...openGroups]))}catch(e){}}
@@ -919,7 +927,7 @@ $('qpop-form').onsubmit=e=>{e.preventDefault();const v=$('qpop-text').value.trim
   const go=()=>{if(list==='shop'){const old=[...items.values()].find(x=>x.list==='shop'&&x.archived&&norm(x.text)===norm(v));
       if(old){put({...old,archived:false,done:false,group:qTo,by:myId||old.by,created:Date.now()});toast('Added to '+where);return}}
     put(o);toast('Added to '+where)};
-  closeQuick();const twin=findDup(list,v);if(twin)askDup(twin,go,()=>{});else go()};
+  closeQuick();const twin=findDup(list,v);if(twin)askDup(twin,go,()=>{},o);else go()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('spop').hidden)closeShop();if(!$('qpop').hidden)closeQuick()}});
 /* ---------- work categories ---------- */
 let wcId=null;
