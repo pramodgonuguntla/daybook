@@ -197,6 +197,10 @@ body.noselect{user-select:none;-webkit-user-select:none}
 .back{height:40px;border:0;background:transparent;color:var(--accent);font-weight:600;font-size:15px;padding:0}
 .notedel{height:40px;border:1px solid var(--line);background:var(--neg-bg);color:var(--neg);border-radius:12px;padding:0 14px;font-weight:600;font-size:14px}
 .notecard{padding:14px}
+.nlist li{padding:0 4px 0 0;gap:0;min-height:60px}.nlist .note-row{flex:1;min-width:0;background:transparent}
+.nhead{margin:14px 4px 6px;font-size:12px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.notepin{height:40px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:0 14px;font-weight:600;font-size:14px}
+.notepin[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
 .page{display:block;width:100%;min-height:55vh;border:0;background:transparent;line-height:1.55;resize:none;padding:0;overflow:auto;field-sizing:fixed}
 /* bottom bar */
 nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:480px;z-index:20;background:var(--card);border-top:1px solid var(--line);
@@ -461,7 +465,7 @@ function startDrag(e){
     lis.forEach(x=>{x.style.transform='';x.classList.remove('shifting')});li.classList.remove('dragging');document.body.classList.remove('noselect');
     dragging=false;
     const ids=lis.map(x=>x.dataset.id);const [m]=ids.splice(from,1);ids.splice(to,0,m);
-    if(to!==from)applyOrder(ids);else render()};
+    if(to!==from)(ul.dataset.kind==='note'?noteOrder:applyOrder)(ids);else render()};
   window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
   raf=requestAnimationFrame(loop);
 }
@@ -761,21 +765,31 @@ function renderNotes(main){
     main.replaceChildren(
       h('div',{class:'head'},h('div',{class:'titlebar'},
         h('button',{class:'back',type:'button',onclick:closeNote},'‹ Notes'),
-        h('button',{class:'notedel',type:'button',onpointerdown:e=>e.preventDefault(),onclick:()=>{const cur=items.get(openNote);openNote=null;if(cur)remove([cur],'Note deleted');else render()}},'Delete'))),
+        h('div',{class:'tright'},
+        h('button',{class:'notepin',type:'button','aria-pressed':String(!!n.pinned),onpointerdown:e=>e.preventDefault(),onclick:e=>{const p=$('page');if(p)saveNote(p.value);const cur=items.get(openNote);if(!cur)return;
+          const on=!cur.pinned;put({...cur,pinned:on,order:null},true);e.currentTarget.setAttribute('aria-pressed',String(on));e.currentTarget.textContent=on?'📌 Pinned':'📌 Pin'}},n.pinned?'📌 Pinned':'📌 Pin'),
+        h('button',{class:'notedel',type:'button',onpointerdown:e=>e.preventDefault(),onclick:()=>{const cur=items.get(openNote);openNote=null;if(cur)remove([cur],'Note deleted');else render()}},'Delete')))),
       h('div',{class:'card notecard'},page));
     if(!n.body)setTimeout(()=>page.focus(),30);
     return;
   }
-  const ns=[...items.values()].filter(i=>i.list==='note').sort((a,b)=>b.updated-a.updated);
+  const ns=[...items.values()].filter(i=>i.list==='note').sort(noteSort);
+  const pins=ns.filter(n=>n.pinned), rest=ns.filter(n=>!n.pinned);
   const when=t=>{const d=new Date(t);return dkey(d)===today?'Today '+fmtT(pad(d.getHours())+':'+pad(d.getMinutes())):d.getDate()+' '+MON[d.getMonth()]};
   main.replaceChildren(
     h('div',{class:'head'},h('div',{class:'titlebar'},h('h1',null,'Notes'),h('div',{class:'tright'},searchBtn(),plusBtn(),avatarBtn())),
       h('div',{class:'sub'},mode==='loading'?'Loading…':ns.length?ns.length+' note'+(ns.length>1?'s':''):'')),
-    ns.length?h('div',{class:'card'},ns.map(n=>{const lines=noteText(n).split('\n').filter(l=>l.trim());
-      return h('button',{class:'note-row',type:'button',onclick:()=>{openNote=n.id;render()}},
-        h('b',null,lines[0]||'Empty note'),h('span',null,when(n.updated)+(lines[1]?' · '+lines.slice(1).join(' '):'')))}))
+    ns.length?h('div',null,
+      pins.length?h('div',{class:'nhead'},'📌 Pinned'):null,pins.length?nList(pins,when):null,
+      pins.length&&rest.length?h('div',{class:'nhead'},'Others'):null,rest.length?nList(rest,when):null)
       :(mode==='loading'?null:h('div',{class:'card empty'},'Tap + to write a note: numbers, ideas, addresses, anything longer.')));
 }
+const noteSort=(a,b)=>{const x=a.order!=null?a.order:-1,y=b.order!=null?b.order:-1;return x-y||b.updated-a.updated};
+function nList(arr,when){return h('div',{class:'card'},h('ul',{class:'nlist','data-kind':'note'},arr.map(n=>{const lines=noteText(n).split('\n').filter(l=>l.trim());
+  return h('li',{'data-id':n.id},h('button',{class:'note-row',type:'button',onclick:()=>{openNote=n.id;render()}},
+      h('b',null,lines[0]||'Empty note'),h('span',null,when(n.updated)+(lines[1]?' · '+lines.slice(1).join(' '):''))),
+    h('span',{class:'grip','aria-label':'Hold and drag to move','role':'button',onpointerdown:startDrag},h('i'),h('i'),h('i')))})))}
+function noteOrder(ids){ids.forEach((id,i)=>{const o=items.get(id);if(o&&o.order!==i)put({...o,order:i},true)});render()}
 const noteText=n=>((n.title?n.title+'\n':'')+(n.body||'')).trim();
 function saveNote(v){if(!openNote)return;const cur=items.get(openNote);
   if(!cur&&!v.trim())return;if(cur&&cur.body===v&&!cur.title)return;
