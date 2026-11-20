@@ -156,6 +156,7 @@ li.off .tick{border-style:dashed}
 .week i.x{border-style:dashed;opacity:.5}
 .week i.f{opacity:.35}
 .backdrop.center{align-items:center;padding:0 24px}
+#dup{z-index:60}
 .dupbox{border-radius:20px;max-width:380px;padding:20px!important;gap:10px}
 .dupt{margin:0;font-size:20px}
 .dupmsg{margin:0 0 6px;color:var(--ink);overflow-wrap:anywhere}
@@ -522,7 +523,8 @@ function itemRow(o){
 }
 const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9\u0900-\u0fff]+/g,'');
 const DUPLISTS=['routine','todo','shop','grocery'];
-function findDup(list,v){const n=norm(v);if(!n)return null;const all=[...items.values()].filter(o=>DUPLISTS.includes(o.list)&&!o.archived&&norm(o.text)===n);return all.find(o=>o.list===list)||all[0]||null}
+function findDup(list,v,skip){const n=norm(v);if(!n)return null;const all=[...items.values()].filter(o=>o.id!==skip&&DUPLISTS.includes(o.list)&&!o.archived&&norm(o.text)===n);return all.find(o=>o.list===list)||all[0]||null}
+function editCheck(o,t,run,target){if(norm(t)===norm(o.text)||!DUPLISTS.includes(o.list))return run();const tw=findDup(o.list,t,o.id);if(!tw)return run();askDup(tw,run,()=>{},target);$('dup-add').textContent='Save anyway'}
 function whereOf(o){
   if(o.list==='todo')return 'To-do ('+(o.rep?'Repeating':o.when==null?'Long term':o.when==='work'?((o.wcat&&items.get(o.wcat))?'Work: '+items.get(o.wcat).name:'Work'):isPC(o.when)?pcName(o.when):DFULL[o.when])+')';
   if(o.list==='note')return 'Notes';
@@ -532,7 +534,7 @@ function whereOf(o){
 let dupOpen=false,dupYes=null,dupNo=null,dupTwin=null;
 function askDup(o,yes,no,target){dupOpen=true;dupYes=yes;dupNo=no;dupTwin=o;
   const same=target&&target.list===o.list&&whereOf(target)===whereOf(o);
-  $('dup-move').hidden=!target||same;
+  $('dup-move').hidden=!target||same;$('dup-add').textContent='Add anyway';
   $('dup-msg').textContent='"'+o.text+'" is already in '+whereOf(o)+'.';$('dup').hidden=false}
 function moveDup(){const tw=dupTwin,y=dupYes;$('dup').hidden=true;dupYes=dupNo=dupTwin=null;setTimeout(()=>{dupOpen=false},50);if(!tw||!y)return;
   const before=new Map(items);items.delete(tw.id);persist(tw.id);y();
@@ -720,8 +722,9 @@ function closeGItem(){giId=null;$('gsheet').hidden=true}
 $('gsheet').addEventListener('click',e=>{if(e.target===$('gsheet'))closeGItem()});
 $('gsheet-newcat').addEventListener('input',e=>{if(e.target.value.trim()){gCat=null;gMark()}});
 $('gsheet-form').onsubmit=e=>{e.preventDefault();const v=$('gsheet-text').value.trim();if(!v){$('gsheet-text').focus();return}
-  const cat=$('gsheet-newcat').value.trim()||gCat||'Other';const o=giId&&items.get(giId);closeGItem();
-  if(o){put({...o,text:v,cat});return}
+  const cat=$('gsheet-newcat').value.trim()||gCat||'Other';const o=giId&&items.get(giId);
+  if(o){editCheck(o,v,()=>{closeGItem();put({...o,text:v,cat})},{...o,text:v,cat});return}
+  closeGItem();
   const twin=findDup('grocery',v);
   const go=()=>{if(twin&&twin.list==='grocery'){put({...twin,need:true,needAt:Date.now(),cat:twin.cat||cat});toast('Added '+twin.text);return}
     put({id:newId(),list:'grocery',text:v,cat,need:true,needAt:Date.now(),created:Date.now(),by:myId});toast('Added '+v)};
@@ -845,7 +848,8 @@ function openPop(id){const o=items.get(id);if(!o)return;popId=id;$('pop-text').v
 function closePop(){popId=null;$('pop').hidden=true}
 $('pop').addEventListener('click',e=>{if(e.target===$('pop'))closePop()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('pop').hidden)closePop()});
-$('pop-form').onsubmit=e=>{e.preventDefault();popSave();closePop()};
+$('pop-form').onsubmit=e=>{e.preventDefault();const o=items.get(popId);if(!o)return closePop();const t=$('pop-text').value.trim()||o.text;
+  editCheck(o,t,()=>{popSave();closePop()},{...o,text:t})};
 $('pop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.textContent='Tap again to delete';setTimeout(()=>{b.textContent='Delete'},3000);return}
   const o=items.get(popId);closePop();if(o)remove([o],'Deleted "'+o.text+'"')};
 /* ---------- shopping list pop-up ---------- */
@@ -876,12 +880,14 @@ $('tpop').addEventListener('click',e=>{if(e.target===$('tpop'))closeTodo()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('tpop').hidden)closeTodo()});
 $('tpop-form').onsubmit=e=>{e.preventDefault();const o=items.get(tId);if(!o){closeTodo();return}
   const t=$('tpop-text').value.trim()||o.text;
+  editCheck(o,t,()=>tSave(o,t),{...o,text:t,rep:tRep||null,when:tWhen,wcat:tWcat||undefined})};
+function tSave(o,t){
   if(tRep){const d=$('tpop-date').value||today;closeTodo();
     const changed=o.rep!==tRep||(isDueRep(o)?dueKey(o):nextRep(o))!==d;const n={...o,text:t,rep:tRep,repDate:changed?d:o.repDate,lastDone:changed?null:o.lastDone};put(n);
     if(changed)toast('Repeats '+(tRep==='month'?'monthly':'yearly')+(isDueRep(n)?', due today':', next '+fmtD(nextRep(n))));return}
   const moved=(o.when??null)!==tWhen||!!o.rep||(tWhen==='work'&&(o.wcat||null)!==tWcat);closeTodo();
   const n={...o,text:t,when:tWhen,created:moved?Date.now():o.created};if(tWhen==='work'){if(tWcat)n.wcat=tWcat;else delete n.wcat}else delete n.wcat;delete n.rep;delete n.repDate;delete n.lastDone;put(n);
-  if(moved)toast('Moved to '+(tWhen==null?'Long term':tWhen==='work'?'Work':isPC(tWhen)?pcName(tWhen):DFULL[tWhen]))};
+  if(moved)toast('Moved to '+(tWhen==null?'Long term':tWhen==='work'?'Work':isPC(tWhen)?pcName(tWhen):DFULL[tWhen]))}
 $('tpop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.textContent='Tap again to delete';setTimeout(()=>{b.textContent='Delete'},3000);return}
   const o=items.get(tId);closeTodo();if(o)remove([o],'Deleted "'+o.text+'"')};
 function closeDup(useIt){$('dup').hidden=true;const y=dupYes,n=dupNo;dupYes=dupNo=null;setTimeout(()=>{dupOpen=false},50);(useIt?y:n)&&(useIt?y:n)()}
@@ -910,9 +916,10 @@ function openShop(id){const o=items.get(id);if(!o)return;sId=id;sGrp=o.group&&it
 function closeShop(){sId=null;$('spop').hidden=true}
 $('spop').addEventListener('click',e=>{if(e.target===$('spop'))closeShop()});
 $('spop-form').onsubmit=e=>{e.preventDefault();const o=items.get(sId);if(!o){closeShop();return}
-  const t=$('spop-text').value.trim()||o.text, moved=(o.group||null)!==sGrp;closeShop();
+  const t=$('spop-text').value.trim()||o.text, moved=(o.group||null)!==sGrp, g0=sGrp;
+  editCheck(o,t,()=>{const sGrp=g0;closeShop();
   put({...o,text:t,group:sGrp,created:moved?Date.now():o.created});
-  if(moved){const g=items.get(sGrp);openGroups.add(sGrp);saveOpen();render();toast('Moved to '+(g?g.name:'list'))}};
+  if(moved){const g=items.get(sGrp);openGroups.add(sGrp);saveOpen();render();toast('Moved to '+(g?g.name:'list'))}},{...o,text:t,group:sGrp})};
 $('spop-del').onclick=e=>{const b=e.currentTarget;if(b.textContent==='Delete'){b.textContent='Tap again to delete';setTimeout(()=>{b.textContent='Delete'},3000);return}
   const o=items.get(sId);closeShop();if(o)remove([o],'Deleted "'+o.text+'"')};
 /* ---------- quick add ---------- */
