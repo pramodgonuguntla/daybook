@@ -466,12 +466,16 @@ function startDrag(e){
     lis.forEach(x=>{x.style.transform='';x.classList.remove('shifting')});li.classList.remove('dragging');document.body.classList.remove('noselect');
     dragging=false;
     const ids=lis.map(x=>x.dataset.id);const [m]=ids.splice(from,1);ids.splice(to,0,m);
-    if(to!==from)(ul.dataset.kind==='note'?noteOrder:applyOrder)(ids);else render()};
+    if(to!==from)(ul.dataset.kind==='note'?noteOrder:applyOrder)(ids,m);else render()};
   window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
   raf=requestAnimationFrame(loop);
 }
-function applyOrder(vis){
+function applyOrder(vis,mid){
   const full=listOf('routine'), set=new Set(vis);let k=0;
+  if(mid){const i=vis.indexOf(mid),prev=vis[i-1],next=vis[i+1];
+    const base=full.filter(o=>set.has(o.id)&&o.id!==mid).map(o=>o.id);
+    const at=prev!=null?base.indexOf(prev)+1:Math.max(0,base.indexOf(next));
+    base.splice(at,0,mid);vis=base}
   const seq=full.map(o=>set.has(o.id)?items.get(vis[k++]):o);
   seq.forEach((o,i)=>{if(o&&o.order!==i)put({...o,order:i},true)});
   render();
